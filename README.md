@@ -43,9 +43,6 @@ Our system identifies violent actions in videos by using pose keypoints extracte
 └── .gitignore
 ```
 
-### README Template
-
-```
 ## Dataset
 We use two datasets for this project:
 - **RWF-2000**: A surveillance footage dataset with 2000 videos.
