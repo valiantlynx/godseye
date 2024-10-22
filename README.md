@@ -111,3 +111,10 @@ Feel free to fork this repository, submit issues, or send pull requests for impr
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE.md) file for details.
+
+
+git clone ssh://git@tools.uia.no:7999/ikt213g24h/godseye.git
+
+model and dataset: https://huggingface.co/valiantlynxz/convlstm_model
+clone it to the root of this project
+
