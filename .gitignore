@@ -2,3 +2,6 @@
 .vscode
 .dist
 .venv
+venv
+.idea
+
