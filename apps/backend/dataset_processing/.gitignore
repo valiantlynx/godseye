@@ -160,6 +160,8 @@ cython_debug/
 
 temp_video.mp4
 private
+*.zip
+archive
 
 
 # PyCharm
