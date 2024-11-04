@@ -1,9 +1,12 @@
 import os
-import json
 import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load MoveNet MultiPose model
 model = hub.load("https://tfhub.dev/google/movenet/multipose/lightning/1").signatures['serving_default']
@@ -18,6 +21,7 @@ categories = ['Fight', 'NonFight']
 
 # Predefined colors for up to 6 people (adjust or add more if needed)
 COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+
 def detect_keypoints(frame):
     # Convert the frame to RGB
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -29,11 +33,10 @@ def detect_keypoints(frame):
     keypoints_with_scores = outputs['output_0'].numpy()
     
     # Debugging: Print the shape and a sample of the keypoints data
-    print(f"Keypoints shape: {keypoints_with_scores.shape}")
-    print("Sample keypoints data:", keypoints_with_scores[0][:3])  # Print first few keypoints for inspection
+    logging.info(f"Keypoints shape: {keypoints_with_scores.shape}")
+    logging.info(f"Sample keypoints data: {keypoints_with_scores[0][:3]}")  # Print first few keypoints for inspection
 
     return keypoints_with_scores
-
 
 def draw_keypoints_on_frame(frame, keypoints_with_scores, threshold=0.3):
     for person_id, person in enumerate(keypoints_with_scores[0]):
@@ -53,6 +56,8 @@ def draw_keypoints_on_frame(frame, keypoints_with_scores, threshold=0.3):
                 
     return frame
 
+# Process a limited number of videos
+LIMIT = 3  # Number of videos to process per category
 
 # Loop through each set and category
 for set_name in sets:
@@ -61,9 +66,11 @@ for set_name in sets:
         output_dir = os.path.join(output_root_dir, set_name, category)
         os.makedirs(output_dir, exist_ok=True)
 
+        video_count = 0
+
         # Loop through videos in the current category
         for video_file in os.listdir(input_dir):
-            if video_file.endswith('.avi'):  # Process only .avi files
+            if video_file.endswith('.avi') and video_count < LIMIT:
                 video_name = os.path.splitext(video_file)[0]
                 video_input_path = os.path.join(input_dir, video_file)
 
@@ -74,45 +81,39 @@ for set_name in sets:
                 # Paths for saving original and processed videos, and keypoints
                 original_video_path = os.path.join(video_output_dir, 'original.avi')
                 processed_video_path = os.path.join(video_output_dir, 'processed.avi')
-                keypoints_path = os.path.join(video_output_dir, 'keypoints.jsonl')
+                
+                # Log the start of processing for the video
+                logging.info(f"Processing {set_name}/{category}/{video_file}")
 
-                # Open the input video
+                # Open the video
                 cap = cv2.VideoCapture(video_input_path)
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                out = None
 
-                # Set up video writers for original and processed videos
-                out_original = cv2.VideoWriter(original_video_path, cv2.VideoWriter_fourcc(*'XVID'), fps, (width, height))
-                out_processed = cv2.VideoWriter(processed_video_path, cv2.VideoWriter_fourcc(*'XVID'), fps, (width, height))
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                # Open keypoints file for writing
-                with open(keypoints_path, 'w') as kp_file:
-                    frame_idx = 0
-                    while cap.isOpened():
-                        ret, frame = cap.read()
-                        if not ret:
-                            break
+                    # Detect keypoints and draw them on the frame
+                    keypoints_with_scores = detect_keypoints(frame)
+                    frame_with_keypoints = draw_keypoints_on_frame(frame, keypoints_with_scores)
 
-                        # Save the original frame
-                        out_original.write(frame)
+                    # Initialize video writer if not already set up
+                    if out is None:
+                        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                        out = cv2.VideoWriter(processed_video_path, fourcc, cap.get(cv2.CAP_PROP_FPS), (frame.shape[1], frame.shape[0]))
 
-                        # Run MoveNet to get keypoints and process the frame
-                        keypoints_with_scores = detect_keypoints(frame)
+                    out.write(frame_with_keypoints)
 
-                        # Save keypoints for this frame to JSONL file
-                        json.dump({"frame": frame_idx, "keypoints": keypoints_with_scores.tolist()}, kp_file)
-                        kp_file.write('\n')
-
-                        # Draw keypoints on frame and save to processed video
-                        frame_with_keypoints = draw_keypoints_on_frame(frame, keypoints_with_scores)
-                        out_processed.write(frame_with_keypoints)
-
-                        frame_idx += 1
-
-                # Release resources
                 cap.release()
-                out_original.release()
-                out_processed.release()
+                if out:
+                    out.release()
+                
+                # Log completion of the video
+                logging.info(f"Completed processing {set_name}/{category}/{video_file}")
+                video_count += 1
 
-print(f"Processed dataset saved in '{output_root_dir}' directory.")
+            if video_count >= LIMIT:
+                break  # Stop after processing the limit
+
+logging.info("Processing completed.")
