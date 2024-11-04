@@ -2,3 +2,8 @@
 .vscode
 .dist
 .venv
+venv
+Pose-Estimation-Ultralytics
+archive*
+private
+__pycache__
