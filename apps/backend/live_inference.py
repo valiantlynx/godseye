@@ -14,7 +14,7 @@ app.add_middleware(CORSMiddleware, allow_origins=[
                    "*"], allow_methods=["*"], allow_headers=["*"])
 
 # Load YOLO model
-model = YOLO("./models/yolov8n-pose.pt")
+model = YOLO("./dataset_processing/models/yolov8n-pose.pt")
 
 def generate_frames(video_source=0):
     cap = cv2.VideoCapture(video_source)
@@ -42,7 +42,7 @@ def read_root():
 @app.post("/process_image")
 async def process_files(
     source: UploadFile = File(...),
-    model_path: str = "./models/yolov8n-pose.pt",
+    model_path: str = "./dataset_processing/models/yolov8n-pose.pt",
     conf: float = 0.3
 ):
     # Save the uploaded file
@@ -76,7 +76,7 @@ async def process_files(
 @app.post("/process_video")
 async def process_video(
     source: UploadFile = File(...),
-    model_path: str = "./models/yolov8n-pose.pt",
+    model_path: str = "./dataset_processing/models/yolov8n-pose.pt",
     conf: float = 0.3
 ):
     # Save the uploaded video
