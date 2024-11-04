@@ -3,15 +3,20 @@
 This project implements a real-time violence detection system using **Pose Estimation** and **LSTM**. We use two benchmark datasets, **RWF-2000** and **Hockey Fight**, to train and evaluate the model. The project includes backend processing for pose extraction and model inference, as well as a frontend for live video monitoring.
 
 ## Table of Contents
-- [Overview](#overview)
-- [Dataset](#dataset)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Model Training](#model-training)
-- [Inference](#inference)
-- [Open Source](#open-source)
-- [Contributing](#contributing)
-- [License](#license)
+- [godseye](#godseye)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+    - [Project Structure](#project-structure)
+  - [Dataset](#dataset)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Running Backend](#running-backend)
+    - [Running Frontend](#running-frontend)
+  - [Model Training](#model-training)
+  - [Inference](#inference)
+  - [Open Source](#open-source)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 ## Overview
 Our system identifies violent actions in videos by using pose keypoints extracted with **MediaPipe**. These keypoints are then passed to an **LSTM** model that predicts whether the actions in the video are violent or non-violent. 
@@ -25,8 +30,8 @@ Our system identifies violent actions in videos by using pose keypoints extracte
 │   ├── /backend
 │   │   ├── /dataset_processing       # Scripts to preprocess datasets and extract keypoints
 │   │   ├── /model_training           # Training scripts using TensorFlow
-│   │   ├── /inference                # Inference scripts for real-time video feed processing
 │   │   ├── /models                   # Trained models and checkpoints
+|   |   |__ live_inference.py         # Inference scripts for real-time video feed processing
 │   │   ├── requirements.txt          # Backend dependencies
 │   │
 │   ├── /frontend
