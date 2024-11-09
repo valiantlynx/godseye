@@ -1,0 +1,9 @@
+tensorflow
+mediapipe
+h5py
+scipy
+scikit-learn
+matplotlib
+numpy
+pandas
+protobuf
