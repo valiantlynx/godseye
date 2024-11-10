@@ -1,5 +1,6 @@
 ultralytics
 fastapi
+fastapi-mail
 uvicorn
 starlette
 opencv-python
