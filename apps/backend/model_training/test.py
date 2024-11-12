@@ -17,7 +17,7 @@ keypoint_labels = [
 ]
 
 class ViolenceDetector:
-    def __init__(self, model_path="lstm-violence-detection.h5"):
+    def __init__(self, model_path="models/acc_96__loss_0.1__Epochs_30.h5"):
         """Initialize the violence detector with a trained model."""
         self.model = load_model(model_path)
         
@@ -133,7 +133,7 @@ def main():
             print(f"Error processing file {json_path}: {e}")
 
     # Example usage with a test file
-    test_json_path = "C:/Users/gorme/projects/godseye/apps/backend/dataset_processing/archive/processed_RWF-2000/val/Fight/0Ow4cotKOuw_4/0Ow4cotKOuw_4.json"  # Replace with actual test file path
+    test_json_path = "C:/Users/gorme/projects/godseye/apps/backend/dataset_processing/archive/keypoints-rwf-2000/val/Fight/YDOJvzChqSg_2/YDOJvzChqSg_2.json"  # Replace with actual test file path
     if os.path.exists(test_json_path):
         process_video_json(test_json_path)
     else:

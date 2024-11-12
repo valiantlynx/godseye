@@ -9,6 +9,7 @@ from keras.models import Sequential
 from keras.callbacks import Callback
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+import datetime as dt
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 # %%
 # Parameters
-root_dir = os.path.join(os.path.dirname(os.getcwd()), "dataset_processing", "archive", "processed_RWF-2000")
+root_dir = os.path.join(os.path.dirname(os.getcwd()), "dataset_processing", "archive", "keypoints-rwf-2000")
 no_of_timesteps = 20
 keypoint_labels = [
     "nose", "left_eye", "right_eye", "left_ear", "right_ear",
@@ -170,10 +171,20 @@ model = Sequential([
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
 # %%
+epochs=100
 # Train the model with the LivePlotCallback
-history = model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test), callbacks=[LivePlotCallback()])
+history = model.fit(X_train, y_train, epochs=epochs, batch_size=32, validation_data=(X_test, y_test), callbacks=[LivePlotCallback()])
 
-model.save("lstm-violence-detection.h5")
+model_evaluation_loss, model_evaluation_accuracy = history
+
+date_time_format = '%Y_%m_%d__%H_%M_%S'
+current_date_time_dt = dt.datetime.now()
+current_date_time_string = dt.datetime.strftime(current_date_time_dt, date_time_format)
+
+model_file_name = f'skeletonViolenceLSTM_model___Date_Time_{current_date_time_string}___Loss_{model_evaluation_loss}___Accuracy_{model_evaluation_accuracy}__Epochs_{epochs}.h5'
+model_path = os.path.join('models', model_file_name)
+
+model.save(model_path)
 
 # Print final metrics 
 final_loss, final_accuracy = model.evaluate(X_test, y_test)
