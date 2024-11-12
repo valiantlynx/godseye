@@ -162,6 +162,8 @@ temp_video.mp4
 private
 *.zip
 archive
+runs
+sample
 
 
 # PyCharm
