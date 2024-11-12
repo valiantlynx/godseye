@@ -27,9 +27,12 @@ async def stream_video():
             await websocket.send(frame_bytes)
 
             # Receive keypoints from server
-            keypoints_data = await websocket.recv()
-            keypoints = json.loads(keypoints_data)["keypoints"]
-            print("Keypoints:", keypoints)
+            try:
+                data = await websocket.recv()
+                print("Received data:", data)
+            except websockets.exceptions.ConnectionClosedOK:
+                print("Connection closed gracefully; reconnecting...")
+                break
 
         cap.release()
 

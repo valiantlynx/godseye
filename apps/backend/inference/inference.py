@@ -12,6 +12,9 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
 from dotenv import load_dotenv
 from utils.gmail import send_gmail
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from model_training.test import ViolenceDetector
 
 
 load_dotenv()
@@ -22,25 +25,66 @@ app.add_middleware(CORSMiddleware, allow_origins=[
                    "*"], allow_methods=["*"], allow_headers=["*"])
 
 # Load YOLO model
-model = YOLO("../dataset_processing/models/yolov8n-pose.pt")
+model = YOLO("models/yolov8n-pose.pt")
+# loaf the violence model
+detector = ViolenceDetector("models/lstm-violence-detection.h5")
+# number of frames before detection
+num_frames = 20
+# the frames to json
+json_data = []
+# when creating the json we need labels
+labeledKeypoints = [
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle"
+]
 
 
-def generate_frames(video_source=0):
-    cap = cv2.VideoCapture(video_source)
-    while cap.isOpened():
-        success, frame = cap.read()
-        if not success:
-            break
-        results = model(frame)
-        annotated_frame = results[0].plot()
-        _, buffer = cv2.imencode('.jpg', annotated_frame)
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-    cap.release()
+def frame_to_json(frame, frame_index=0):
+    # Detect keypoints using YOLO model
+    results = model(frame)
+    newFrameData = []
+
+    # Extract keypoints and bounding box data for JSON output
+    for result in results:
+        boxes = result.boxes
+        keypoints = result.keypoints
+
+        if boxes is not None and len(boxes) > 0:
+            for i in range(len(boxes)):
+                box_data = boxes.xyxy[i].cpu().numpy()
+                confidence = boxes.conf[i].cpu().item()
+                box = {
+                    "x1": float(box_data[0]),
+                    "y1": float(box_data[1]),
+                    "x2": float(box_data[2]),
+                    "y2": float(box_data[3])
+                }
+
+                keypoints_data = []
+                if keypoints is not None:
+                    keypoints_array = keypoints.data[i].cpu().numpy()
+                    for j, (x, y, conf) in enumerate(keypoints_array):
+                        keypoints_data.append({
+                            "label": labeledKeypoints[j],
+                            "coordinates": {"x": float(x), "y": float(y)},
+                            "confidence": float(conf)
+                        })
+
+                newFrameData.append({
+                    "person_id": i + 1,
+                    "confidence": confidence,
+                    "box": box,
+                    "keypoints": keypoints_data
+                })
+
+    return ({"frame": frame_index, "detections": newFrameData})
 
 
 @app.websocket("/ws/video-stream/")
 async def video_stream(websocket: WebSocket):
+    global json_data
     await websocket.accept()
     try:
         while True:
@@ -54,16 +98,30 @@ async def video_stream(websocket: WebSocket):
             if frame is None:
                 break
 
-            results = model(frame)
-            keypoints_tensor = results[0].keypoints.xy  # Extract xy keypoints
+            # convert the frames to json data
+            json_data.append(frame_to_json(frame, len(json_data)))
 
-            keypoints_data = [
-                {"x": float(point[0]), "y": float(point[1])}
-                for point in keypoints_tensor[0]  # Iterate over each keypoint in the frame
-                if point[0] != 0 and point[1] != 0  # Filter out zero points
-            ]
+            # cv2.imshow("frame", frame)
+            # if cv2.waitKey(1) & 0xFF == ord('q'):
+            #     break
 
-            await websocket.send_json({"keypoints": keypoints_data})
+            if len(json_data) < num_frames:
+                await websocket.send_json({"job": "processing"})
+                continue
+
+            # run the violence prediction model on the json data
+            result = detector.predict(json_data)
+            json_data.clear()
+
+            # print results
+            if "error" not in result:
+                print(f"Violence Probability: {result['probability']:.2%}")
+                print(f"Classification: {'Violent' if result['is_violent'] else 'Non-violent'}")
+                print(f"Confidence: {result['confidence']:.2%}")
+                await websocket.send_json({"Result": f"{'Violent' if result['is_violent'] else 'Non-violent'}"})
+            else:
+                print(f"Error processing: {result['error']}")
+                await websocket.send_json({"Result": f"{result['error']}"})
 
     except Exception as e:
         print("Connection closed:", e)
@@ -99,73 +157,73 @@ async def process_image(
     if image is None:
         return {"error": "Failed to process the image"}
 
-    results = model(source=image, conf=conf)
+    json_data = frame_to_json(image)
+    violence = detector.predict(json_data)
 
-    # violence = lstm(resutls)
-    # return violence
+    # print results
+    if "error" not in result:
+        print(f"Violence Probability: {result['probability']:.2%}")
+        print(f"Classification: {'Violent' if result['is_violent'] else 'Non-violent'}")
+        print(f"Confidence: {result['confidence']:.2%}")
+        return {
+            "probability": result['probability'],
+            "classification": "Violent" if result['is_violent'] else "Non-violent",
+            "confidence": result['confidence']
+        }
 
-    # this will be swapped out for the actual lstm model result:    
-    processed_images = []
-    for idx, r in enumerate(results):
-        image_array = r.plot(conf=True, boxes=True)
+    else:
+        print(f"Error processing: {result['error']}")
+        return {"error": result['error']}
 
-        # Encode the image in memory as PNG
-        success, buffer = cv2.imencode('.png', image_array)
-        if success:
-            # Create an in-memory bytes buffer
-            image_bytes = io.BytesIO(buffer.tobytes())
-            processed_images.append(image_bytes)
-
-    image_bytes.seek(0)
-    return StreamingResponse(image_bytes, media_type="image/png")
 
 @app.post("/process_video")
 async def process_video(
     source: UploadFile = File(...),
     conf: float = 0.3
 ):
-    # Save the uploaded video
+    # Check the file extension
     file_extension = os.path.splitext(source.filename)[1]
-    temp_file_path = "temp_video" + file_extension
-    with open(temp_file_path, "wb") as f:
-        f.write(source.file.read())
-
-    # Process the video
-    if file_extension.lower() in (".mp4", ".avi", ".mov", ".mkv", "webm"):
-        results = model(source=temp_file_path, show=True, conf=conf)
-    else:
+    if file_extension.lower() not in (".mp4", ".avi", ".mov", ".webm"):
         return {"error": "Unsupported file format"}
 
-    # Save processed video frames
-    processed_frames = []
-    for idx, r in enumerate(results):
-        image_array = r.plot(conf=True, boxes=True)
-        processed_frames.append(image_array)
+    # Save the video temporarily to process it
+    temp_video_path = f"temp_{source.filename}"
+    with open(temp_video_path, "wb") as video_file:
+        video_file.write(await source.read())
 
-    # Define codec and create VideoWriter
-    fourcc = cv2.VideoWriter_fourcc(*"XVID")
-    processed_video_path = "./sample/processed_video.avi"
+    # Open the video with OpenCV
+    cap = cv2.VideoCapture(temp_video_path)
+    json_data = []
 
-    out = cv2.VideoWriter(processed_video_path, fourcc, 30,
-                          (processed_frames[0].shape[1], processed_frames[0].shape[0]))
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-    # Write processed frames to the video
-    for frame in processed_frames:
-        out.write(frame)
-    out.release()
-    # Read the processed video as bytes
-    with open(processed_video_path, "rb") as video_file:
-        video_bytes = video_file.read()
+        json_data.append(frame_to_json(frame))
 
-    # Adjust media_type as needed
-    # return processed_video_path(processed_video_path=processed_video_path)
-    # for future read and stream in api or save in s3 bucket and fetch
-    # # Read the processed video as bytes
-    # with open(processed_video_path, "rb") as video_file:
-    #     video_bytes = video_file.read()
+    cap.release()
+    os.remove(temp_video_path)  # Clean up the temporary video file
 
-    # return StreamingResponse(io.BytesIO(video_bytes), media_type="video/mp4")
-    return {"result": f"Succesfully saved in '{str(processed_video_path)}'"}
+    if len(json_data) == 0:
+        return {"error": "Failed to process the video"}
+
+    # Run the violence prediction model on the JSON data
+    result = detector.predict(json_data)
+
+    # Check if prediction was successful and format the response
+    if "error" not in result:
+        print(f"Violence Probability: {result['probability']:.2%}")
+        print(f"Classification: {'Violent' if result['is_violent'] else 'Non-violent'}")
+        print(f"Confidence: {result['confidence']:.2%}")
+        return {
+            "probability": result['probability'],
+            "classification": "Violent" if result['is_violent'] else "Non-violent",
+            "confidence": result['confidence']
+        }
+    else:
+        print(f"Error processing: {result['error']}")
+        return {"error": result['error']}
 
 
 @app.post("/send_email")
