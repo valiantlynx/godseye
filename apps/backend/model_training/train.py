@@ -10,7 +10,7 @@ from keras.callbacks import Callback
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import datetime as dt
-
+from tensorflow.keras.callbacks import EarlyStopping
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
@@ -171,11 +171,15 @@ model = Sequential([
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
 # %%
+early_stopping_callback = EarlyStopping(monitor = 'val_loss', patience = 10, mode = 'min', restore_best_weights = True)
+
 epochs=100
 # Train the model with the LivePlotCallback
-history = model.fit(X_train, y_train, epochs=epochs, batch_size=32, validation_data=(X_test, y_test), callbacks=[LivePlotCallback()])
+history = model.fit(X_train, y_train, epochs=epochs, batch_size=32, validation_data=(X_test, y_test), callbacks = [early_stopping_callback])
 
-model_evaluation_loss, model_evaluation_accuracy = history
+
+model_evaluation_history = model.evaluate(X_test, y_test)
+model_evaluation_loss, model_evaluation_accuracy = model_evaluation_history
 
 date_time_format = '%Y_%m_%d__%H_%M_%S'
 current_date_time_dt = dt.datetime.now()
@@ -185,9 +189,5 @@ model_file_name = f'skeletonViolenceLSTM_model___Date_Time_{current_date_time_st
 model_path = os.path.join('models', model_file_name)
 
 model.save(model_path)
-
-# Print final metrics 
-final_loss, final_accuracy = model.evaluate(X_test, y_test)
-print(f"\nFinal Test Accuracy: {final_accuracy * 100:.2f}%")
 
 

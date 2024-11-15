@@ -27,7 +27,7 @@ app.add_middleware(CORSMiddleware, allow_origins=[
 # Load YOLO model
 model = YOLO("models/yolov8n-pose.pt")
 # loaf the violence model
-detector = ViolenceDetector("models/lstm-violence-detection.h5")
+detector = ViolenceDetector("models/acc_96__loss_0.1__Epochs_30.h5")
 # number of frames before detection
 num_frames = 20
 # the frames to json
@@ -101,9 +101,9 @@ async def video_stream(websocket: WebSocket):
             # convert the frames to json data
             json_data.append(frame_to_json(frame, len(json_data)))
 
-            # cv2.imshow("frame", frame)
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #     break
+            cv2.imshow("frame", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
             if len(json_data) < num_frames:
                 await websocket.send_json({"job": "processing"})

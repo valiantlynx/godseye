@@ -6,3 +6,6 @@ starlette
 opencv-python
 pillow
 python-multipart
+google-api-python-client
+googleapiclient
+websockets
