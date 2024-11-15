@@ -118,10 +118,10 @@ async def video_stream(websocket: WebSocket):
                 print(f"Violence Probability: {result['probability']:.2%}")
                 print(f"Classification: {'Violent' if result['is_violent'] else 'Non-violent'}")
                 print(f"Confidence: {result['confidence']:.2%}")
-                await websocket.send_json({"Result": f"{'Violent' if result['is_violent'] else 'Non-violent'}"})
+                await websocket.send_json({"result": f"{'Violent' if result['is_violent'] else 'Non-violent'}", "confidence": f"{result["confidence"]:.2%}"})
             else:
                 print(f"Error processing: {result['error']}")
-                await websocket.send_json({"Result": f"{result['error']}"})
+                await websocket.send_json({"result": f"{result['error']}"})
 
     except Exception as e:
         print("Connection closed:", e)
