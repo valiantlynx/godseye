@@ -8,3 +8,4 @@ numpy
 pandas
 protobuf
 tqdm
+datasets
