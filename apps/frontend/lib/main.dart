@@ -19,14 +19,13 @@ class GodsEyeDashboard extends StatelessWidget {
   }
 }
 
-
 class DashboardScreen extends StatefulWidget {
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  String liveStreamTitle = "Live Video Stream";
+  String liveStreamTitle = "Non-Violent";
 
   @override
   void initState() {
@@ -106,14 +105,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   SizedBox(height: 16),
 
+                  // Centered dynamic title
+                  Column(
+                    children: [
+                      SizedBox(height: 16),
+                      Center(
+                        child: Text(
+                          liveStreamTitle,
+                          style: TextStyle(
+                            fontSize: 45,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                    ],
+                  ),
+
+                  SizedBox(height: 16),
+
                   // Live Stream Section with dynamic title
                   SectionCard(
-                    title: liveStreamTitle,
+                    title: "Live Video Stream",
                     child: Container(
                       height: 1000,
                       color: Colors.grey[300],
                       child: Center(
-                        child: CameraWidget(websocketUrl: 'ws://localhost:8000/ws/video-stream/'),
+                        child: CameraWidget(
+                            websocketUrl:
+                                'ws://localhost:8000/ws/video-stream/'),
                       ),
                     ),
                   ),

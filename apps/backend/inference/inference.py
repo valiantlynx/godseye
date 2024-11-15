@@ -27,7 +27,7 @@ app.add_middleware(CORSMiddleware, allow_origins=[
 # Load YOLO model
 model = YOLO("models/yolov8n-pose.pt")
 # loaf the violence model
-detector = ViolenceDetector("models/lstm-violence-detection.h5")
+detector = ViolenceDetector("models/skeletonViolenceLSTM_model___Date_Time_2024_11_13__10_49_23___Loss_0.10056436061859131___Accuracy_0.9627585411071777__Epochs_100.h5")
 # number of frames before detection
 num_frames = 20
 # the frames to json
@@ -118,7 +118,7 @@ async def video_stream(websocket: WebSocket):
                 print(f"Violence Probability: {result['probability']:.2%}")
                 print(f"Classification: {'Violent' if result['is_violent'] else 'Non-violent'}")
                 print(f"Confidence: {result['confidence']:.2%}")
-                await websocket.send_json({"result": f"{'Violent' if result['is_violent'] else 'Non-violent'}"})
+                await websocket.send_json({"result": f"{'Violent' if result['is_violent'] else 'Non-violent'}", "confidence": f"{result["confidence"]:.2%}"})
             else:
                 print(f"Error processing: {result['error']}")
                 await websocket.send_json({"result": f"{result['error']}"})
