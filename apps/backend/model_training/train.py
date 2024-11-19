@@ -181,7 +181,7 @@ def main():
     callbacks = [
         LivePlotCallback(),
         EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True),
-        ModelCheckpoint("violence_model.h5", monitor="val_loss", save_best_only=True)
+        ModelCheckpoint("violence_model.keras", monitor="val_loss", save_best_only=True)
     ]
 
     # Train model
@@ -194,7 +194,7 @@ def main():
         class_weight=compute_class_weight("balanced", classes=np.unique(y_train), y=y_train),
         callbacks=callbacks
     )
-    logging.info("Training completed. Model saved as 'violence_model.h5'.")
+    logging.info("Training completed. Model saved as 'violence_model.keras'.")
 
 if __name__ == "__main__":
     main()
