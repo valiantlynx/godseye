@@ -172,7 +172,7 @@ def evaluate_validation_dataset(model_path, val_dir, mean=None, std=None):
 def main():
     # Update these paths to match your system
     model_path = "models/violence_detector_best.keras"
-    val_dir = "C:/Users/gorme/projects/godseye/apps/backend/dataset_processing/archive/keypoints-rwf-2000/val"
+    val_dir = "C:/Users/gorme/projects/godseye/apps/backend/dataset_processing/archive/Keypoints-hokey"
     
     # Load normalization parameters (if you saved them during training)
     try:
