@@ -4,12 +4,10 @@ import os
 import io
 import cv2
 import uvicorn
-from PIL import Image
 import numpy as np
 from ultralytics import YOLO
 from fastapi import FastAPI, UploadFile, File, WebSocket
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import StreamingResponse
 from dotenv import load_dotenv
 from utils.gmail import send_gmail
 import sys
@@ -27,7 +25,7 @@ app.add_middleware(CORSMiddleware, allow_origins=[
 # Load YOLO model
 model = YOLO("models/yolov8n-pose.pt")
 # loaf the violence model
-detector = ViolenceDetector("models/acc_96__loss_0.1__Epochs_30.h5")
+detector = ViolenceDetector()
 # number of frames before detection
 num_frames = 20
 # the frames to json
@@ -118,7 +116,7 @@ async def video_stream(websocket: WebSocket):
                 print(f"Violence Probability: {result['probability']:.2%}")
                 print(f"Classification: {'Violent' if result['is_violent'] else 'Non-violent'}")
                 print(f"Confidence: {result['confidence']:.2%}")
-                await websocket.send_json({"result": f"{'Violent' if result['is_violent'] else 'Non-violent'}", "confidence": f"{result["confidence"]:.2%}"})
+                await websocket.send_json({"result": f"{'Violent' if result['is_violent'] else 'Non-violent'}", "confidence": f"{result['confidence']:.2%}"})
             else:
                 print(f"Error processing: {result['error']}")
                 await websocket.send_json({"result": f"{result['error']}"})
@@ -236,4 +234,5 @@ async def send_notification(recipient_email: str, message: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    import uvicorn
+    uvicorn.run("inference:app", host="127.0.0.1", port=8000, reload=True)
