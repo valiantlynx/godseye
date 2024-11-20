@@ -35,7 +35,7 @@ y = []
 # %%
 # Custom callback for live plotting
 class LivePlotCallback(Callback):
-    def __init__(self, save_path="training_progress.png"):
+    def __init__(self, save_path="models/training_progress.png"):
         super().__init__()
         self.save_path = save_path
 
@@ -167,8 +167,8 @@ std = X.std(axis=(0, 1))
 X = (X - mean) / std
 
 # Save normalization parameters
-np.save("mean.npy", mean)
-np.save("std.npy", std)
+np.save("models/mean.npy", mean)
+np.save("models/std.npy", std)
 
 # Split into training and validation
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
@@ -186,7 +186,7 @@ model = build_model(input_shape)
 callbacks = [
     LivePlotCallback(),
     EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
-    ModelCheckpoint("violence_detector_best.keras", monitor="val_loss", save_best_only=True)
+    ModelCheckpoint("models/violence_detector_best.keras", monitor="val_loss", save_best_only=True)
 ]
 
 history = model.fit(
