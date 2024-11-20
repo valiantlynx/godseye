@@ -11,6 +11,7 @@ from keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from tqdm import tqdm
+import datetime as dt
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -105,11 +106,11 @@ def load_json_data(json_path, label):
                     sequence.append(person_keypoints)
                 sequences.append(sequence)
 
-            return np.array(sequences), [label] * len(sequences)
+            return np.array(sequences)
 
     except Exception as e:
         logging.error(f"Error loading {json_path}: {e}")
-        return None, None
+        return None
 
 # %%
 def process_dataset(root_dir):
@@ -122,79 +123,84 @@ def process_dataset(root_dir):
 
             for video_folder in tqdm(os.listdir(category_dir)):
                 video_folder_path = os.path.join(category_dir, video_folder)
-                if os.path.isdir(video_folder_path):
-                    json_path = os.path.join(video_folder_path, "keypoints.json")
-                    data, labels = load_json_data(json_path, 1 if label == "Fight" else 0)
-                    if data is not None:
-                        X.extend(data)
-                        y.extend(labels)
 
-# %%
-def save_normalization_params(mean, std, save_path="normalization_params.json"):
-    """Save mean and standard deviation as a JSON file."""
-    params = {"mean": mean.tolist(), "std": std.tolist()}
-    with open(save_path, "w") as f:
-        json.dump(params, f, indent=4)
-    logging.info(f"Normalization parameters saved to {save_path}")
+                if os.path.isdir(video_folder_path):
+                    json_path = os.path.join(video_folder_path, f"{video_folder}.json")
+
+                    if os.path.isfile(json_path):
+                        sequences = load_json_data(json_path, label)
+                        if sequences is not None:
+                            X.extend(sequences)
+                            y.extend([1 if label == 'Fight' else 0] * len(sequences))
 
 # %%
 def build_model(input_shape):
     """Build and compile the LSTM model."""
     model = Sequential([
         LSTM(64, return_sequences=True, input_shape=input_shape),
-        Dropout(0.2),
-        LSTM(64),
-        Dropout(0.2),
+        BatchNormalization(),
+        Dropout(0.5),
+        LSTM(32),
+        BatchNormalization(),
+        Dropout(0.5),
         Dense(32, activation="relu"),
         BatchNormalization(),
+        Dropout(0.3),
         Dense(1, activation="sigmoid")
     ])
-    model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=["accuracy"])
+
+    model.compile(optimizer=Adam(learning_rate=0.001),
+                  loss="binary_crossentropy",
+                  metrics=["accuracy"])
     return model
 
 # %%
-def main():
-    logging.info("Processing dataset...")
-    process_dataset(root_dir)
+# Load dataset
+logging.info("Loading dataset...")
+process_dataset(root_dir)
+X = np.array(X, dtype=np.float32)
+y = np.array(y, dtype=np.float32)
 
-    # Convert to numpy arrays
-    X_np = np.array(X)
-    y_np = np.array(y)
+# Normalize data
+mean = X.mean(axis=(0, 1))
+std = X.std(axis=(0, 1))
+X = (X - mean) / std
 
-    # Calculate normalization parameters
-    mean = X_np.mean(axis=(0, 1))
-    std = X_np.std(axis=(0, 1))
+# Save normalization parameters
+np.save("mean.npy", mean)
+np.save("std.npy", std)
 
-    # Normalize data
-    X_np = (X_np - mean) / std
+# Split into training and validation
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-    # Save normalization parameters
-    save_normalization_params(mean, std)
+# Compute class weights
+class_weights = compute_class_weight("balanced", classes=np.unique(y_train), y=y_train)
+class_weights = {i: class_weights[i] for i in range(len(class_weights))}
 
-    # Split dataset
-    X_train, X_val, y_train, y_val = train_test_split(X_np, y_np, test_size=0.2, random_state=42)
+# %%
+# Train model
+logging.info("Training model...")
+input_shape = (no_of_timesteps, feature_dim)
+model = build_model(input_shape)
 
-    # Build model
-    model = build_model((no_of_timesteps, feature_dim))
+callbacks = [
+    LivePlotCallback(),
+    EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
+    ModelCheckpoint("violence_detector_best.keras", monitor="val_loss", save_best_only=True)
+]
 
-    # Set up callbacks
-    callbacks = [
-        LivePlotCallback(),
-        EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True),
-        ModelCheckpoint("violence_model.keras", monitor="val_loss", save_best_only=True)
-    ]
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    epochs=5,
+    batch_size=32,
+    class_weight=class_weights,
+    callbacks=callbacks
+)
 
-    # Train model
-    logging.info("Starting training...")
-    model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        epochs=50,
-        batch_size=32,
-        class_weight=compute_class_weight("balanced", classes=np.unique(y_train), y=y_train),
-        callbacks=callbacks
-    )
-    logging.info("Training completed. Model saved as 'violence_model.keras'.")
+# %%
+# Evaluate model
+logging.info("Evaluating model...")
+loss, accuracy = model.evaluate(X_val, y_val)
+logging.info(f"Validation Loss: {loss:.4f}, Validation Accuracy: {accuracy:.4f}")
 
-if __name__ == "__main__":
-    main()
