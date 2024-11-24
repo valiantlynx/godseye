@@ -3,10 +3,10 @@ let isSending = false;
 let webSocketData = null; 
 
 function changeDartTitle(input) {
-    if (window.updateTitleFromJS) {
-      window.updateTitleFromJS(input);
+    if (window.updateDashboardFromJS) {
+      window.updateDashboardFromJS(JSON.stringify(input));
     } else {
-      console.error("Dart function updateTitleFromJS is not available.");
+      console.error("Dart function updateDashboardFromJS is not available.");
     }
   }
 
@@ -36,7 +36,7 @@ function startWebSocket(wsUrl) {
   
     // if we actually get a result
       } else if (receivedData.hasOwnProperty("result")) {
-        changeDartTitle(receivedData["result"]);
+        changeDartTitle(receivedData);
       } else {
         console.log("Unexpected result:", receivedData);
       }

@@ -1,23 +1,31 @@
+# %pip install tensorflow==2.15.1 mediapipe h5py scipy scikit-learn matplotlib numpy pandas protobuf tqdm datasets
 # %%
 import os
 import json
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
-from keras.layers import LSTM, Dense, Dropout
+from keras.layers import LSTM, Dense, Dropout, BatchNormalization
 from keras.models import Sequential
-from keras.callbacks import Callback
+from keras.callbacks import Callback, EarlyStopping, ModelCheckpoint
+from keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 from tqdm import tqdm
 import datetime as dt
+import tensorflow as tf
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
+print("TensorFlow version:", tf.__version__)
+print("GPU available:", tf.config.list_physical_devices('GPU'))
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # %%
 # Parameters
-root_dir = os.path.join(os.path.dirname(os.getcwd()), "dataset_processing", "archive", "keypoints-rwf-2000")
+root_dir = os.path.join(os.path.dirname(os.getcwd()), "dataset_processing", "archive", "Keypoints-total")
 no_of_timesteps = 20
 keypoint_labels = [
     "nose", "left_eye", "right_eye", "left_ear", "right_ear",
@@ -25,6 +33,7 @@ keypoint_labels = [
     "left_wrist", "right_wrist", "left_hip", "right_hip",
     "left_knee", "right_knee", "left_ankle", "right_ankle"
 ]
+feature_dim = len(keypoint_labels) * 2  # x and y coordinates
 
 # Initialize dataset lists
 X = []
@@ -33,57 +42,63 @@ y = []
 # %%
 # Custom callback for live plotting
 class LivePlotCallback(Callback):
+    def __init__(self, save_path="models/training_progress_Keypoints_total.png"):
+        super().__init__()
+        self.save_path = save_path
+
     def on_train_begin(self, logs=None):
         self.losses = []
+        self.val_losses = []
         self.accuracies = []
-        plt.ion()  # Enable interactive mode
+        self.val_accuracies = []
+        plt.ion()
         self.fig, self.ax = plt.subplots(1, 2, figsize=(12, 5))
-        self.ax[0].set_title("Loss")
-        self.ax[1].set_title("Accuracy")
 
     def on_epoch_end(self, epoch, logs=None):
         self.losses.append(logs["loss"])
+        self.val_losses.append(logs["val_loss"])
         self.accuracies.append(logs["accuracy"])
-        
-        # Clear and update loss plot
+        self.val_accuracies.append(logs["val_accuracy"])
+
         self.ax[0].cla()
         self.ax[0].plot(self.losses, label="Training Loss", color="blue")
+        self.ax[0].plot(self.val_losses, label="Validation Loss", color="orange")
         self.ax[0].set_title("Loss")
         self.ax[0].legend()
 
-        # Clear and update accuracy plot
         self.ax[1].cla()
         self.ax[1].plot(self.accuracies, label="Training Accuracy", color="green")
+        self.ax[1].plot(self.val_accuracies, label="Validation Accuracy", color="red")
         self.ax[1].set_title("Accuracy")
         self.ax[1].legend()
-        
-        plt.pause(0.01)  # Small pause to update the plot
+
+        plt.pause(0.01)
         plt.draw()
+        self.fig.savefig(self.save_path)  # Save plot to file at the end of each epoch
 
     def on_train_end(self, logs=None):
         plt.ioff()
-        plt.show()
+        # No need to call plt.show()
 
 # %%
 def load_json_data(json_path, label):
+    """Load keypoints from a JSON file and process them into sequences."""
     try:
         with open(json_path) as file:
             data = json.load(file)
-            frames_data = []
-
             if len(data) < no_of_timesteps:
                 logging.warning(f"Skipping {json_path} as it has fewer than {no_of_timesteps} frames.")
                 return None
 
+            sequences = []
             for i in range(no_of_timesteps, len(data)):
                 sequence = []
                 frames = data[i - no_of_timesteps:i]
 
                 for frame in frames:
-                    if frame["detections"]:
+                    if frame.get("detections"):
                         person = frame["detections"][0]
                         person_keypoints = []
-                        
                         keypoints_dict = {kp['label']: kp['coordinates'] for kp in person['keypoints']}
                         
                         for label in keypoint_labels:
@@ -96,10 +111,9 @@ def load_json_data(json_path, label):
                         person_keypoints = [0.0, 0.0] * len(keypoint_labels)
                     
                     sequence.append(person_keypoints)
+                sequences.append(sequence)
 
-                frames_data.append(np.array(sequence))
-
-            return frames_data
+            return np.array(sequences)
 
     except Exception as e:
         logging.error(f"Error loading {json_path}: {e}")
@@ -107,6 +121,7 @@ def load_json_data(json_path, label):
 
 # %%
 def process_dataset(root_dir):
+    """Load and process the dataset."""
     global X, y
     for category in ['train', 'val']:
         for label in ['Fight', 'NonFight']:
@@ -121,73 +136,78 @@ def process_dataset(root_dir):
 
                     if os.path.isfile(json_path):
                         sequences = load_json_data(json_path, label)
-
-                        if sequences:
+                        if sequences is not None:
                             X.extend(sequences)
                             y.extend([1 if label == 'Fight' else 0] * len(sequences))
 
+# %%
+def build_model(input_shape):
+    """Build and compile the LSTM model."""
+    model = Sequential([
+        LSTM(64, return_sequences=True, input_shape=input_shape),
+        BatchNormalization(),
+        Dropout(0.5),
+        LSTM(32),
+        BatchNormalization(),
+        Dropout(0.5),
+        Dense(32, activation="relu"),
+        BatchNormalization(),
+        Dropout(0.3),
+        Dense(1, activation="sigmoid")
+    ])
 
-# Load and process dataset
-process_dataset(root_dir)
+    model.compile(optimizer=Adam(learning_rate=0.001),
+                  loss="binary_crossentropy",
+                  metrics=["accuracy"])
+    return model
 
 # %%
-# Convert to numpy arrays with correct shape
+# Load dataset
+logging.info("Loading dataset...")
+process_dataset(root_dir)
 X = np.array(X, dtype=np.float32)
-y = np.array(y, dtype=np.int32)
+y = np.array(y, dtype=np.float32)
 
-
-print("Dataset shapes:")
-print(f"X shape: {X.shape}")
-print(f"y shape: {y.shape}")
-
-if len(X) == 0:
-    raise ValueError("No data was loaded. Check the dataset directory and file paths.")
-
-# Normalize the coordinates
-mean = np.mean(X.reshape(-1, X.shape[-1]), axis=0)
-std = np.std(X.reshape(-1, X.shape[-1]), axis=0)
-std = np.where(std == 0, 1, std)
+# Normalize data
+mean = X.mean(axis=(0, 1))
+std = X.std(axis=(0, 1))
 X = (X - mean) / std
 
-# %%
-# Perform train/test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Save normalization parameters
+np.save("models/Keypoints_total_mean.npy", mean)
+np.save("models/Keypoints_total_std.npy", std)
 
-print("\nTraining set shapes:")
-print(f"X_train shape: {X_train.shape}")
-print(f"y_train shape: {y_train.shape}")
+# Split into training and validation
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# %%
-# Model definition
-model = Sequential([
-    LSTM(64, input_shape=(no_of_timesteps, len(keypoint_labels) * 2), return_sequences=True),
-    Dropout(0.2),
-    LSTM(32, return_sequences=False),
-    Dropout(0.2),
-    Dense(1, activation='sigmoid')
-])
-
-# Compile model
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+# Compute class weights
+class_weights = compute_class_weight("balanced", classes=np.unique(y_train), y=y_train)
+class_weights = {i: class_weights[i] for i in range(len(class_weights))}
 
 # %%
-epochs=100
-# Train the model with the LivePlotCallback
-history = model.fit(X_train, y_train, epochs=epochs, batch_size=32, validation_data=(X_test, y_test), callbacks=[LivePlotCallback()])
+# Train model
+logging.info("Training model...")
+input_shape = (no_of_timesteps, feature_dim)
+model = build_model(input_shape)
 
-model_evaluation_loss, model_evaluation_accuracy = history
+callbacks = [
+    LivePlotCallback(),
+    EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True),
+    ModelCheckpoint("models/Keypoints_total.keras", monitor="val_loss", save_best_only=True)
+]
 
-date_time_format = '%Y_%m_%d__%H_%M_%S'
-current_date_time_dt = dt.datetime.now()
-current_date_time_string = dt.datetime.strftime(current_date_time_dt, date_time_format)
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    epochs=160,
+    batch_size=32,
+    class_weight=class_weights,
+    callbacks=callbacks
+)
 
-model_file_name = f'skeletonViolenceLSTM_model___Date_Time_{current_date_time_string}___Loss_{model_evaluation_loss}___Accuracy_{model_evaluation_accuracy}__Epochs_{epochs}.h5'
-model_path = os.path.join('models', model_file_name)
-
-model.save(model_path)
-
-# Print final metrics 
-final_loss, final_accuracy = model.evaluate(X_test, y_test)
-print(f"\nFinal Test Accuracy: {final_accuracy * 100:.2f}%")
-
+# %%
+# Evaluate model
+logging.info("Evaluating model...")
+loss, accuracy = model.evaluate(X_val, y_val)
+logging.info(f"Validation Loss: {loss:.4f}, Validation Accuracy: {accuracy:.4f}")
 

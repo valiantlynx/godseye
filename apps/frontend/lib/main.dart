@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'camera/camera.dart';
+import 'dart:convert';
 import 'dart:js' as js;
-
+import 'camera/camera.dart';
 void main() {
   runApp(GodsEyeDashboard());
 }
@@ -26,20 +26,52 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   String liveStreamTitle = "Non-Violent";
+  double confidence = 0.0; // Confidence should be a double
 
   @override
   void initState() {
     super.initState();
 
-    // Define a Dart function to update the title
-    void updateTitleFromJS(String newTitle) {
-      setState(() {
-        liveStreamTitle = newTitle; // Update the title
-      });
+    // Define a Dart function to update the title and confidence from JS
+    void updateDashboardFromJS(dynamic data) {
+      try {
+        Map<String, dynamic> parsedData;
+        print("Received data: $data");
+
+        if (data is String) {
+          // If data is a string, attempt to parse it as JSON
+          parsedData = json.decode(data) as Map<String, dynamic>;
+        } else if (data is Map) {
+          // If data is already a map, use it directly
+          parsedData = Map<String, dynamic>.from(data);
+        } else {
+          throw Exception("Unsupported data type received from JavaScript");
+        }
+
+        // Debugging: Print the structure of the received data
+        print("Parsed data: $parsedData");
+
+        // Extract the confidence value and convert it to a double
+        String confidenceStr = parsedData["confidence"] ?? "0.0%"; // Default to "0.0%" if not found
+        double confidenceValue = 0.0;
+
+        // Remove the '%' and convert to double
+        if (confidenceStr.endsWith('%')) {
+          confidenceValue = double.tryParse(confidenceStr.replaceAll('%', '')) ?? 0.0;
+        }
+
+        // Update the state with the received data
+        setState(() {
+          liveStreamTitle = parsedData["result"] ?? "Unknown"; // Update the title dynamically
+          confidence = confidenceValue / 100; // Convert to a value between 0 and 1 for display
+        });
+      } catch (e) {
+        print("Failed to decode JSON data: $e");
+      }
     }
 
     // Expose the Dart function to JavaScript
-    js.context['updateTitleFromJS'] = js.allowInterop(updateTitleFromJS);
+    js.context['updateDashboardFromJS'] = js.allowInterop(updateDashboardFromJS);
   }
 
   @override
@@ -105,17 +137,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   SizedBox(height: 16),
 
-                  // Centered dynamic title
+                  // Centered dynamic title and confidence
                   Column(
                     children: [
                       SizedBox(height: 16),
                       Center(
-                        child: Text(
-                          liveStreamTitle,
-                          style: TextStyle(
-                            fontSize: 45,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        child: Column(
+                          children: [
+                            Text(
+                              liveStreamTitle,
+                              style: TextStyle(
+                                fontSize: 45,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Confidence: ${(confidence * 100).toStringAsFixed(2)}%', // Apply to double
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: confidence > 0.9
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       SizedBox(height: 16),
@@ -137,8 +184,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                   ),
-
-                  SizedBox(height: 16),
+                    SizedBox(height: 16),
 
                   // Additional sections
                   SectionCard(
@@ -170,6 +216,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+
 
 // Sidebar Item
 class SidebarItem extends StatelessWidget {
