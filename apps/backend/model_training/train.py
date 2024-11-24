@@ -1,3 +1,4 @@
+# %pip install tensorflow==2.15.1 mediapipe h5py scipy scikit-learn matplotlib numpy pandas protobuf tqdm datasets
 # %%
 import os
 import json
@@ -12,13 +13,19 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from tqdm import tqdm
 import datetime as dt
+import tensorflow as tf
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
+print("TensorFlow version:", tf.__version__)
+print("GPU available:", tf.config.list_physical_devices('GPU'))
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
 # %%
 # Parameters
-root_dir = os.path.join(os.path.dirname(os.getcwd()), "dataset_processing", "archive", "keypoints-rwf-2000")
+root_dir = os.path.join(os.path.dirname(os.getcwd()), "dataset_processing", "archive", "Keypoints-total")
 no_of_timesteps = 20
 keypoint_labels = [
     "nose", "left_eye", "right_eye", "left_ear", "right_ear",
@@ -35,7 +42,7 @@ y = []
 # %%
 # Custom callback for live plotting
 class LivePlotCallback(Callback):
-    def __init__(self, save_path="models/training_progress.png"):
+    def __init__(self, save_path="models/training_progress_Keypoints_total.png"):
         super().__init__()
         self.save_path = save_path
 
@@ -167,8 +174,8 @@ std = X.std(axis=(0, 1))
 X = (X - mean) / std
 
 # Save normalization parameters
-np.save("models/mean.npy", mean)
-np.save("models/std.npy", std)
+np.save("models/Keypoints_total_mean.npy", mean)
+np.save("models/Keypoints_total_std.npy", std)
 
 # Split into training and validation
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
@@ -185,14 +192,14 @@ model = build_model(input_shape)
 
 callbacks = [
     LivePlotCallback(),
-    EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
-    ModelCheckpoint("models/violence_detector_best.keras", monitor="val_loss", save_best_only=True)
+    EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True),
+    ModelCheckpoint("models/Keypoints_total.keras", monitor="val_loss", save_best_only=True)
 ]
 
 history = model.fit(
     X_train, y_train,
     validation_data=(X_val, y_val),
-    epochs=5,
+    epochs=160,
     batch_size=32,
     class_weight=class_weights,
     callbacks=callbacks
