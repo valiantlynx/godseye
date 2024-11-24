@@ -1,4 +1,4 @@
-tensorflow
+tensorflow==2.15.1
 mediapipe
 h5py
 scipy
