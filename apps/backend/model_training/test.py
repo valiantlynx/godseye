@@ -1,10 +1,6 @@
-import os
-import json
 import numpy as np
 from keras.models import load_model
 import logging
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-from tqdm import tqdm
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
