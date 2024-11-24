@@ -18,7 +18,8 @@ keypoint_labels = [
 ]
 
 class ViolenceDetector:
-    def __init__(self, model_path="models/violence_detector_best.keras", mean_path="models/mean.npy", std_path="models/std.npy"):
+    def __init__(self, model_path="models/all60/Keypoints_total.keras", mean_path="models/all60/Keypoints_total_mean.npy", std_path="models/all60/Keypoints_total_std.npy"):
+        print(model_path)
         """Initialize the violence detector with a trained model and normalization parameters."""
         self.model = load_model(model_path)
         logging.info(f"Loaded model from {model_path}")
