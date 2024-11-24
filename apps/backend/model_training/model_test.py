@@ -171,13 +171,13 @@ def evaluate_validation_dataset(model_path, val_dir, mean=None, std=None):
 
 def main():
     # Update these paths to match your system
-    model_path = "models/violence_detector_best.keras"
-    val_dir = "C:/Users/gorme/projects/godseye/apps/backend/dataset_processing/archive/Keypoints-hokey"
+    model_path = "../inference/models/all60/Keypoints_total.keras"
+    val_dir = "../dataset_processing/archive/Keypoints-hokey/val"
     
     # Load normalization parameters (if you saved them during training)
     try:
-        mean = np.load('models/mean.npy')
-        std = np.load('models/std.npy')
+        mean = np.load('../inference/models/all60/Keypoints_total_mean.npy')
+        std = np.load('../inference/models/all60/Keypoints_total_std.npy')
     except FileNotFoundError:
         logging.warning("Normalization parameters not found. Proceeding without normalization.")
         mean = None
