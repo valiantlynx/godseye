@@ -13,6 +13,7 @@ from utils.gmail import send_gmail
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from model_training.test import ViolenceDetector
+import json
 
 
 load_dotenv()
@@ -25,7 +26,11 @@ app.add_middleware(CORSMiddleware, allow_origins=[
 # Load YOLO model
 model = YOLO("models/yolov8n-pose.pt")
 # loaf the violence model
-detector = ViolenceDetector()
+detector = ViolenceDetector(
+            model_path="models/all60/Keypoints_total.keras",
+            mean=np.load('models/all60/Keypoints_total_mean.npy'),
+            std=np.load('models/all60/Keypoints_total_std.npy')
+        )
 # number of frames before detection
 num_frames = 20
 # the frames to json
@@ -88,7 +93,6 @@ async def video_stream(websocket: WebSocket):
         while True:
             # Receive frame data from client
             frame_data = await websocket.receive_bytes()
-
             # Decode the frame from bytes to image
             nparr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -96,8 +100,9 @@ async def video_stream(websocket: WebSocket):
             if frame is None:
                 break
 
-            # convert the frames to json data
-            json_data.append(frame_to_json(frame, len(json_data)))
+            # Convert the frames to JSON data
+            frame_json = frame_to_json(frame, len(json_data))
+            json_data.append(frame_json)
 
             cv2.imshow("frame", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -107,16 +112,30 @@ async def video_stream(websocket: WebSocket):
                 await websocket.send_json({"job": "processing"})
                 continue
 
-            # run the violence prediction model on the json data
-            result = detector.predict(json_data)
-            json_data.clear()
+            # Process keypoints from collected frames
+            sequences = detector.process_keypoints(json_data)
+            json_data.clear()  # Clear the buffer for the next sequence
+              
+            if sequences is not None:
+                # Run the violence prediction model on the processed keypoints
+                avg_prob, final_prediction = detector.predict_video(sequences)
 
-            # print results
-            if "error" not in result:
+                # Format the result for the frontend
+                result = {
+                    "error": "Failed to process input data",
+                    "probability": float(avg_prob),
+                    "is_violent": bool(final_prediction == 1),
+                    "confidence": max(float(avg_prob), 1 - float(avg_prob))
+                }
                 print(f"Violence Probability: {result['probability']:.2%}")
                 print(f"Classification: {'Violent' if result['is_violent'] else 'Non-violent'}")
                 print(f"Confidence: {result['confidence']:.2%}")
-                await websocket.send_json({"result": f"{'Violent' if result['is_violent'] else 'Non-violent'}", "confidence": f"{result['confidence']:.2%}"})
+
+                # Send results to the frontend
+                await websocket.send_json({"result": "Violent" if result["is_violent"] else "Non-violent",
+                    "confidence": f"{result['confidence']:.2%}",
+                    "probability": f"{result['probability']:.2%}"
+                })
             else:
                 print(f"Error processing: {result['error']}")
                 await websocket.send_json({"result": f"{result['error']}"})
