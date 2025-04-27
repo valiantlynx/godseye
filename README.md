@@ -1,8 +1,11 @@
 # godseye
 
 This project implements a real-time violence detection system using **Pose Estimation** and **LSTM**. We use two benchmark datasets, **RWF-2000** and **Hockey Fight**, to train and evaluate the model. The project includes backend processing for pose extraction and model inference, as well as a frontend for live video monitoring.
+
  **Model Weights**: https://huggingface.co/valiantlynxz/godseye-violence-detection-model/tree/main
+ 
  **Dataset**: https://huggingface.co/datasets/valiantlynxz/godseye-violence-detection-dataset
+ 
 ## Table of Contents
 - [godseye](#godseye)
   - [Table of Contents](#table-of-contents)
